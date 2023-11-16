@@ -1,20 +1,16 @@
 import os
 from typing import Optional
-
+import requests
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
 
-from telegram import Update, Bot
-from telegram.ext import Dispatcher, MessageHandler, Filters, CommandHandler
-
 TOKEN = os.environ.get("TOKEN")
+TELEGRAM_API_BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 
 app = FastAPI()
 
+
 class TelegramWebhook(BaseModel):
-    '''
-    Telegram Webhook Model using Pydantic for request body validation
-    '''
     update_id: int
     message: Optional[dict]
     edited_message: Optional[dict]
@@ -28,34 +24,25 @@ class TelegramWebhook(BaseModel):
     poll: Optional[dict]
     poll_answer: Optional[dict]
 
-def start(update, context):
-    context.bot.send_message(chat_id=update.effective_chat.id, text="I'm a bot, please talk to me!")
 
-def register_handlers(dispatcher):
-    start_handler = CommandHandler('start', start)
-    dispatcher.add_handler(start_handler)
+def start(chat_id):
+    # Send a message using the plain Telegram Bot API
+    endpoint = f"{TELEGRAM_API_BASE_URL}/sendMessage"
+    params = {
+        "chat_id": chat_id,
+        "text": "I'm a bot, please talk to me!"
+    }
+    requests.post(endpoint, json=params)
+
 
 @app.post("/webhook")
 def webhook(webhook_data: TelegramWebhook):
-    '''
-    Telegram Webhook
-    '''
-    # Method 1
-    bot = Bot(token=TOKEN)
-    update = Update.de_json(webhook_data.__dict__, bot) # convert the Telegram Webhook class to dictionary using __dict__ dunder method
-    dispatcher = Dispatcher(bot, None, workers=4)
-    register_handlers(dispatcher)
-
-    # handle webhook request
-    dispatcher.process_update(update)
-
-    # Method 2
-    # you can just handle the webhook request here without using python-telegram-bot
-    # if webhook_data.message:
-    #     if webhook_data.message.text == '/start':
-    #         send_message(webhook_data.message.chat.id, 'Hello World')
+    if webhook_data.message and webhook_data.message.text == '/start':
+        # Handle the '/start' command
+        start(webhook_data.message.chat.id)
 
     return {"message": "ok"}
+
 
 @app.get("/")
 def index():
